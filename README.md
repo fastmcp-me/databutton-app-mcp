@@ -19,8 +19,7 @@ Then configure your LLM client (e.g. Claude Desktop or Cursor), like this:
     "myDatabuttonApp": {
       "command": "uvx",
       "args": [
-        "-U",
-        "databutton-app-mcp"
+        "databutton-app-mcp@latest"
       ],
       "env": {
         "DATABUTTON_API_KEY": "YOUR-DATABUTTON-APP-KEY"
@@ -39,7 +38,7 @@ or this
       "command": "uvx",
       "args": [
         "-U",
-        "databutton-app-mcp",
+        "databutton-app-mcp@latest"
         "-k",
         "/path/to/apikey.txt"
       ]
@@ -52,5 +51,3 @@ Here /path/to/apikey.txt is the full path to a file containing the api key,
 or DATABUTTON_API_KEY is either the api key value or the path to a file containing it.
 You can download the API key for your Databutton app on the app settings page.
 Make sure to keep it secure and don't share it.
-
-Note: This is early stage software. The -U flag to uvx make sure you always get the latest version of the tool.
