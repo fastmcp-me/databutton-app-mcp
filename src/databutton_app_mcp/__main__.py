@@ -14,7 +14,7 @@ from websockets.asyncio.client import ClientConnection
 logger = logging.getLogger("databutton-app-mcp")
 
 logging.basicConfig(
-    level=logging.WARNING,
+    level=logging.DEBUG,
     format="databutton-app-mcp %(levelname)s: %(message)s",
     stream=sys.stderr,
 )
