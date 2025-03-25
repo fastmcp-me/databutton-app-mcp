@@ -1,4 +1,5 @@
 import argparse
+import pathlib
 import base64
 import json
 import asyncio
@@ -59,22 +60,38 @@ def parse_apikey(apikey: str) -> dict[str, str]:
     if not apikey:
         raise ValueError("API key must be provided")
 
+    print(apikey)
+
     try:
-        return json.loads(base64.urlsafe_b64decode(apikey))
-    except Exception:
+        decoded = base64.urlsafe_b64decode(apikey).decode()
+        print("json.loads:")
+        print(decoded)
+        return json.loads(decoded)
+    except Exception as e:
+        print(f"Failed to parse API key: {e}")
         pass
 
     try:
-        return json.loads(base64.b64decode(apikey))
-    except Exception:
+        decoded = base64.b64decode(apikey).decode()
+        print("json.loads:")
+        print(decoded)
+        return json.loads(decoded)
+    except Exception as e:
+        print(f"Failed to parse API key: {e}")
         pass
 
     try:
+        print("json.loads:")
+        print(apikey)
         return json.loads(apikey)
-    except Exception:
+    except Exception as e:
+        print(f"Failed to parse API key: {e}")
         pass
 
     raise ValueError("Invalid API key")
+
+
+DATABUTTON_API_KEY = "DATABUTTON_API_KEY"
 
 
 def main():
@@ -89,21 +106,28 @@ def main():
         help="File containing API key to use",
         required=False,
     )
-
     args = parser.parse_args()
 
-    claims: dict[str, str] = {}
+    env_apikey = os.environ.get(DATABUTTON_API_KEY)
 
-    if env_apikey := os.environ.get("DATABUTTON_API_KEY"):
-        try:
-            claims = parse_apikey(env_apikey)
-        except Exception:
-            with open(env_apikey, "r") as f:
-                claims = parse_apikey(f.read().strip())
-    elif args.apikeyfile:
-        claims = parse_apikey(args.apikeyfile)
-    else:
+    if not (args.apikeyfile or env_apikey):
         print("No API key provided")
+        sys.exit(1)
+
+    if args.apikeyfile and pathlib.Path(args.apikeyfile).exists():
+        apikey = pathlib.Path(args.apikeyfile).read_text()
+    else:
+        apikey = env_apikey
+
+    if not apikey:
+        print("Provided API key is blank")
+        sys.exit(1)
+
+    claims: dict[str, str] = {}
+    try:
+        claims = parse_apikey(apikey)
+    except Exception as e:
+        print(f"Failed to parse API key: {e}")
         sys.exit(1)
 
     uri = claims.get("uri")
