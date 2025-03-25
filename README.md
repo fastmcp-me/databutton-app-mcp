@@ -5,29 +5,30 @@ Use API endpoints from your Databutton app as LLM tools from any MCP compatible 
 This is a simple proxy that runs locally and connects securely to your Databutton app
 using the MCP protocol over websockets.
 
+To use it, make sure you have uv installed, see instructions here if not:
+
+    https://docs.astral.sh/uv/getting-started/installation/
+
 First download an API key from the settings page of your Databutton app, and save it to a file.
 
-For example say you downloaded a key file named `MY-DATABUTTON-APP-KEYID.json`,
-and save it to the directory `~/.config/databutton/mcp-keys/`.
-
-Then to add this app to clients such as Claude Desktop, add the following to your client MCP settings or config file:
+Then configure your LLM client (e.g. Claude Desktop or Cursor), like this:
 
 ```json
 {
   "mcpServers": {
-    "my-databutton-app": {
+    "myDatabuttonApp": {
       "command": "uvx",
       "args": [
         "databutton-app-mcp"
       ],
       "env": {
-        "DATABUTTON_MCP_API_KEY": "~/.config/databutton/mcp-keys/MY-DATABUTTON-APP-KEYID.json"
+        "DATABUTTON_API_KEY": "YOUR-DATABUTTON-APP-KEY"
       }
     }
   }
 }
 ```
 
-Here DATABUTTON_MCP_API_KEY either refers to the full path of the api key file you stored,
-or it can be the api key value itself.
-Either way one api key gives access to endpoints of one Databutton app.
+Here DATABUTTON_API_KEY is either the api key or the path to a file containing it.
+You can download the API key for your Databutton app on the app settings page.
+Make sure to keep it secure and don't share it.
