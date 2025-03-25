@@ -6,9 +6,18 @@ import asyncio
 import signal
 import sys
 import os
+import logging
 
 from websockets import Subprotocol, connect
 from websockets.asyncio.client import ClientConnection
+
+logger = logging.getLogger("databutton-app-mcp")
+
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(levelname)s: %(message)s",
+    stream=sys.stderr,
+)
 
 
 async def stdin_to_ws(websocket: ClientConnection):
@@ -50,7 +59,7 @@ async def run_ws_proxy(uri: str, bearer: str | None = None):
         try:
             await asyncio.gather(stdin_task, stdout_task)
         except asyncio.CancelledError:
-            print("Connection terminated", file=sys.stderr)
+            logger.error("Connection terminated")
         finally:
             stdin_task.cancel()
             stdout_task.cancel()
@@ -60,32 +69,21 @@ def parse_apikey(apikey: str) -> dict[str, str]:
     if not apikey:
         raise ValueError("API key must be provided")
 
-    print(apikey)
-
     try:
         decoded = base64.urlsafe_b64decode(apikey).decode()
-        print("json.loads:")
-        print(decoded)
         return json.loads(decoded)
-    except Exception as e:
-        print(f"Failed to parse API key: {e}")
+    except Exception:
         pass
 
     try:
         decoded = base64.b64decode(apikey).decode()
-        print("json.loads:")
-        print(decoded)
         return json.loads(decoded)
-    except Exception as e:
-        print(f"Failed to parse API key: {e}")
+    except Exception:
         pass
 
     try:
-        print("json.loads:")
-        print(apikey)
         return json.loads(apikey)
-    except Exception as e:
-        print(f"Failed to parse API key: {e}")
+    except Exception:
         pass
 
     raise ValueError("Invalid API key")
@@ -111,7 +109,7 @@ def main():
     env_apikey = os.environ.get(DATABUTTON_API_KEY)
 
     if not (args.apikeyfile or env_apikey):
-        print("No API key provided")
+        logger.error("No API key provided")
         sys.exit(1)
 
     if args.apikeyfile and pathlib.Path(args.apikeyfile).exists():
@@ -120,26 +118,26 @@ def main():
         apikey = env_apikey
 
     if not apikey:
-        print("Provided API key is blank")
+        logger.error("Provided API key is blank")
         sys.exit(1)
 
     claims: dict[str, str] = {}
     try:
         claims = parse_apikey(apikey)
     except Exception as e:
-        print(f"Failed to parse API key: {e}")
+        logger.error(f"Failed to parse API key: {e}")
         sys.exit(1)
 
     uri = claims.get("uri")
     if not uri:
-        print("URI must be provided")
+        logger.error("URI must be provided")
         sys.exit(1)
     if not (
         uri.startswith("ws://localhost")
         or uri.startswith("ws://127.0.0.1:")
         or uri.startswith("wss://")
     ):
-        print("URI must start with 'ws://' or 'wss://'")
+        logger.error("URI must start with 'ws://' or 'wss://'")
         sys.exit(1)
 
     # TODO: Exchange refresh token for access token here
@@ -155,7 +153,8 @@ def main():
             )
         )
     except KeyboardInterrupt:
-        print("Program terminated", file=sys.stderr)
+        logger.error("Program terminated")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
