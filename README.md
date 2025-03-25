@@ -37,7 +37,6 @@ or this
     "myDatabuttonApp": {
       "command": "uvx",
       "args": [
-        "-U",
         "databutton-app-mcp@latest"
         "-k",
         "/path/to/apikey.txt"
