@@ -55,6 +55,10 @@ async def run_ws_proxy(uri: str, bearer: str | None = None):
             uri,
             subprotocols=[Subprotocol("mcp")] + auth_subprotocols,
             additional_headers=auth_headers,
+            open_timeout=60,
+            ping_interval=10,
+            ping_timeout=10,
+            user_agent_header="databutton-app-mcp",  # +f"/{__version__}",
         ) as websocket:
             logger.info("Connection established")
 
