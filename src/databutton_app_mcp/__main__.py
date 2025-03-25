@@ -15,7 +15,7 @@ logger = logging.getLogger("databutton-app-mcp")
 
 logging.basicConfig(
     level=logging.WARNING,
-    format="%(levelname)s: %(message)s",
+    format="databutton-app-mcp %(levelname)s: %(message)s",
     stream=sys.stderr,
 )
 
@@ -37,6 +37,8 @@ async def ws_to_stdout(websocket: ClientConnection):
 
 
 async def run_ws_proxy(uri: str, bearer: str | None = None):
+    logger.info(f"Connecting to mcp server at {uri}")
+
     # Set up signal handling for graceful exit
     loop = asyncio.get_event_loop()
     loop.add_signal_handler(signal.SIGINT, loop.stop)
@@ -48,21 +50,26 @@ async def run_ws_proxy(uri: str, bearer: str | None = None):
     auth_subprotocols: list[Subprotocol] = []
     # auth_subprotocols.append(Subprotocol(f"Authorization.Bearer.{bearer}"))
 
-    async with connect(
-        uri,
-        subprotocols=[Subprotocol("mcp")] + auth_subprotocols,
-        additional_headers=auth_headers,
-    ) as websocket:
-        stdin_task = asyncio.create_task(stdin_to_ws(websocket))
-        stdout_task = asyncio.create_task(ws_to_stdout(websocket))
+    try:
+        async with connect(
+            uri,
+            subprotocols=[Subprotocol("mcp")] + auth_subprotocols,
+            additional_headers=auth_headers,
+        ) as websocket:
+            logger.info("Connection established")
 
-        try:
-            await asyncio.gather(stdin_task, stdout_task)
-        except asyncio.CancelledError:
-            logger.error("Connection terminated")
-        finally:
-            stdin_task.cancel()
-            stdout_task.cancel()
+            stdin_task = asyncio.create_task(stdin_to_ws(websocket))
+            stdout_task = asyncio.create_task(ws_to_stdout(websocket))
+
+            try:
+                await asyncio.gather(stdin_task, stdout_task)
+            except asyncio.CancelledError:
+                logger.error("Connection terminated")
+            finally:
+                stdin_task.cancel()
+                stdout_task.cancel()
+    except Exception as e:
+        logger.error(f"Closing with error: {e}")
 
 
 def parse_apikey(apikey: str) -> dict[str, str]:
@@ -93,57 +100,66 @@ DATABUTTON_API_KEY = "DATABUTTON_API_KEY"
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Expose Databutton app endpoints as LLM tools with MCP over websocket"
-    )
-    parser.add_argument(
-        "-k",
-        "--apikeyfile",
-        dest="apikeyfile",
-        type=str,
-        help="File containing API key to use",
-        required=False,
-    )
-    args = parser.parse_args()
-
-    env_apikey = os.environ.get(DATABUTTON_API_KEY)
-
-    if not (args.apikeyfile or env_apikey):
-        logger.error("No API key provided")
-        sys.exit(1)
-
-    if args.apikeyfile and pathlib.Path(args.apikeyfile).exists():
-        apikey = pathlib.Path(args.apikeyfile).read_text()
-    else:
-        apikey = env_apikey
-
-    if not apikey:
-        logger.error("Provided API key is blank")
-        sys.exit(1)
-
-    claims: dict[str, str] = {}
+    logger.info("Starting Databutton app MCP proxy")
     try:
-        claims = parse_apikey(apikey)
+        parser = argparse.ArgumentParser(
+            description="Expose Databutton app endpoints as LLM tools with MCP over websocket"
+        )
+        parser.add_argument(
+            "-k",
+            "--apikeyfile",
+            dest="apikeyfile",
+            type=str,
+            help="File containing API key to use",
+            required=False,
+        )
+        args = parser.parse_args()
+
+        env_apikey = os.environ.get(DATABUTTON_API_KEY)
+
+        if not (args.apikeyfile or env_apikey):
+            logger.error("No API key provided")
+            sys.exit(1)
+
+        if args.apikeyfile and pathlib.Path(args.apikeyfile).exists():
+            logger.info(f"Using api key from file {args.apikeyfile}")
+            apikey = pathlib.Path(args.apikeyfile).read_text()
+        else:
+            logger.info("Using api key from environment variable")
+            apikey = env_apikey
+
+        if not apikey:
+            logger.error("Provided API key is blank")
+            sys.exit(1)
+
+        claims: dict[str, str] = {}
+        try:
+            claims = parse_apikey(apikey)
+        except Exception as e:
+            logger.error(f"Failed to parse API key: {e}")
+            sys.exit(1)
+
+        uri = claims.get("uri")
+        if not uri:
+            logger.error("URI must be provided")
+            sys.exit(1)
+
+        if not (
+            uri.startswith("ws://localhost")
+            or uri.startswith("ws://127.0.0.1:")
+            or uri.startswith("wss://")
+        ):
+            logger.error("URI must start with 'ws://' or 'wss://'")
+            sys.exit(1)
+
+        # TODO: Exchange refresh token for access token here
+        accessToken: str | None = claims.get("accessToken")
+        if claims.get("refreshToken"):
+            pass
+
     except Exception as e:
-        logger.error(f"Failed to parse API key: {e}")
+        logger.error(f"Error while parsing input: {e}")
         sys.exit(1)
-
-    uri = claims.get("uri")
-    if not uri:
-        logger.error("URI must be provided")
-        sys.exit(1)
-    if not (
-        uri.startswith("ws://localhost")
-        or uri.startswith("ws://127.0.0.1:")
-        or uri.startswith("wss://")
-    ):
-        logger.error("URI must start with 'ws://' or 'wss://'")
-        sys.exit(1)
-
-    # TODO: Exchange refresh token for access token here
-    accessToken: str | None = claims.get("accessToken")
-    if claims.get("refreshToken"):
-        pass
 
     try:
         asyncio.run(
