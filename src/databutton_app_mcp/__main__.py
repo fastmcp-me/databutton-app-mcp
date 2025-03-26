@@ -13,12 +13,6 @@ from websockets.asyncio.client import ClientConnection
 
 logger = logging.getLogger("databutton-app-mcp")
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="databutton-app-mcp %(levelname)s: %(message)s",
-    stream=sys.stderr,
-)
-
 
 async def stdin_to_ws(websocket: ClientConnection):
     """Read from stdin and send to websocket"""
@@ -102,25 +96,57 @@ def parse_apikey(apikey: str) -> dict[str, str]:
 
 DATABUTTON_API_KEY = "DATABUTTON_API_KEY"
 
+description = "Expose Databutton app endpoints as LLM tools with MCP over websocket"
+
+epilog = f"""\
+Instead of providing an API key filepath with -k, you can set the {DATABUTTON_API_KEY} environment variable.
+
+Go to https://databutton.com to build apps and get your API key.
+"""
+
 
 def main():
-    logger.info("Starting Databutton app MCP proxy")
     try:
         parser = argparse.ArgumentParser(
-            description="Expose Databutton app endpoints as LLM tools with MCP over websocket"
+            prog="databutton-app-mcp",
+            usage="uvx databutton-app-mcp@latest [-h] [-k APIKEYFILE] [-v]",
+            description="Expose Databutton app endpoints as LLM tools with MCP over websocket",
+            epilog=epilog,
         )
         parser.add_argument(
             "-k",
             "--apikeyfile",
-            dest="apikeyfile",
-            type=str,
-            help="File containing API key to use",
+            help="File containing the API key",
             required=False,
+        )
+        parser.add_argument(
+            "-v",
+            "--verbose",
+            help="Run in verbose mode with debug logging",
+            action="store_true",
         )
         args = parser.parse_args()
 
         env_apikey = os.environ.get(DATABUTTON_API_KEY)
+    except Exception as e:
+        logger.error(f"Error while parsing input: {e}")
+        sys.exit(1)
 
+    if args.verbose:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="databutton-app-mcp %(levelname)s: %(message)s",
+            stream=sys.stderr,
+        )
+    else:
+        logging.basicConfig(
+            level=logging.WARNING,
+            format="databutton-app-mcp %(levelname)s: %(message)s",
+            stream=sys.stderr,
+        )
+
+    try:
+        logger.info("Starting Databutton app MCP proxy")
         if not (args.apikeyfile or env_apikey):
             logger.error("No API key provided")
             sys.exit(1)
