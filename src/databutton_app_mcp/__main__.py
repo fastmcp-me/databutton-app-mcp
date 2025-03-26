@@ -127,7 +127,13 @@ def main():
         parser.add_argument(
             "-v",
             "--verbose",
-            help="Run in verbose mode with debug logging",
+            help="Run in verbose mode with info logging",
+            action="store_true",
+        )
+        parser.add_argument(
+            "-d",
+            "--debug",
+            help="Run in very verbose mode with debug logging",
             action="store_true",
         )
         args = parser.parse_args()
@@ -137,18 +143,16 @@ def main():
         logger.error(f"Error while parsing input: {e}")
         sys.exit(1)
 
-    if args.verbose:
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format="databutton-app-mcp %(levelname)s: %(message)s",
-            stream=sys.stderr,
-        )
-    else:
-        logging.basicConfig(
-            level=logging.WARNING,
-            format="databutton-app-mcp %(levelname)s: %(message)s",
-            stream=sys.stderr,
-        )
+    level = (
+        logging.DEBUG
+        if args.debug
+        else (logging.INFO if args.verbose else logging.WARNING)
+    )
+    logging.basicConfig(
+        level=level,
+        format="databutton-app-mcp %(levelname)s: %(message)s",
+        stream=sys.stderr,
+    )
 
     try:
         logger.info("Starting Databutton app MCP proxy")
@@ -166,14 +170,18 @@ def main():
         if not apikey:
             logger.error("Provided API key is blank")
             sys.exit(1)
+    except Exception as e:
+        logger.error(f"Failed to get API key: {e}")
+        sys.exit(1)
 
-        claims: dict[str, str] = {}
-        try:
-            claims = parse_apikey(apikey)
-        except Exception as e:
-            logger.error(f"Failed to parse API key: {e}")
-            sys.exit(1)
+    claims: dict[str, str] = {}
+    try:
+        claims = parse_apikey(apikey)
+    except Exception as e:
+        logger.error(f"Failed to parse API key: {e}")
+        sys.exit(1)
 
+    try:
         uri = claims.get("uri")
         if not uri:
             logger.error("URI must be provided")
@@ -193,7 +201,7 @@ def main():
             pass
 
     except Exception as e:
-        logger.error(f"Error while parsing input: {e}")
+        logger.error(f"Failed to interpret API key: {e}")
         sys.exit(1)
 
     try:
