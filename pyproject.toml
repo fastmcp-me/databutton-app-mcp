@@ -14,7 +14,10 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
 ]
 requires-python = ">=3.11"
-dependencies = ["websockets>=15.0.1"]
+dependencies = [
+    "certifi>=2025.1.31",
+    "websockets>=15.0.1",
+]
 authors = [{ name = "Martin Sandve Alnæs", email = "msa@databutton.io" }]
 maintainers = [{ name = "Martin Sandve Alnæs", email = "msa@databutton.io" }]
 
