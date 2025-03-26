@@ -1,17 +1,21 @@
 import argparse
-import pathlib
+import asyncio
 import base64
 import json
-import asyncio
-import signal
-import sys
-import os
 import logging
+import os
+import pathlib
+import signal
+import ssl
+import sys
 
+import certifi
 from websockets import Subprotocol, connect
 from websockets.asyncio.client import ClientConnection
 
 logger = logging.getLogger("databutton-app-mcp")
+
+ssl_context = ssl.create_default_context(cafile=certifi.where())
 
 
 async def stdin_to_ws(websocket: ClientConnection):
@@ -53,6 +57,7 @@ async def run_ws_proxy(uri: str, bearer: str | None = None):
             ping_interval=10,
             ping_timeout=10,
             user_agent_header="databutton-app-mcp",  # +f"/{__version__}",
+            ssl=ssl_context,
         ) as websocket:
             logger.info("Connection established")
 
