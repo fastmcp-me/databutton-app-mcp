@@ -12,7 +12,7 @@ wheels = [
 
 [[package]]
 name = "databutton-app-mcp"
-version = "0.1.13"
+version = "0.1.14"
 source = { editable = "." }
 dependencies = [
     { name = "certifi" },
