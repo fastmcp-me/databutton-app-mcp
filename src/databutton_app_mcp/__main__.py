@@ -17,8 +17,6 @@ from websockets.asyncio.client import ClientConnection
 
 logger = logging.getLogger("databutton-app-mcp")
 
-ssl_context = ssl.create_default_context(cafile=certifi.where())
-
 
 async def stdin_to_ws(websocket: ClientConnection):
     """Read from stdin and send to websocket"""
@@ -38,6 +36,13 @@ async def ws_to_stdout(websocket: ClientConnection):
 
 async def run_ws_proxy(uri: str, bearer: str | None = None):
     logger.info(f"Connecting to mcp server at {uri}")
+
+    use_ssl = uri.startswith("wss://")
+    if not use_ssl:
+        logger.warning("Using insecure websocket connection")
+    ssl_context = (
+        ssl.create_default_context(cafile=certifi.where()) if use_ssl else None
+    )
 
     # add_signal_handler doesn't support Windows
     if sys.platform != "win32":
@@ -197,6 +202,12 @@ def parse_args():
         help="Show uri it would connect to and exit",
         action="store_true",
     )
+    parser.add_argument(
+        "-u",
+        "--uri",
+        help="Use a custom uri for the MCP server endpoint",
+        default="",
+    )
     return parser.parse_args()
 
 
@@ -244,6 +255,10 @@ def main():
     except Exception as e:
         logger.error(f"Failed to interpret API key: {e}")
         sys.exit(1)
+
+    if args.uri:
+        logger.info(f"Using override uri from command line: {args.uri}")
+        uri = args.uri
 
     if args.show_uri:
         print("databutton-app-mcp would connect to:")
