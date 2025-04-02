@@ -1,6 +1,6 @@
 [project]
 name = "databutton-app-mcp"
-version = "0.1.15"
+version = "0.1.16"
 description = "Call your Databutton app endpoints as LLM tools with MCP"
 readme = "README.md"
 license = "MIT"
@@ -14,7 +14,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
 ]
 requires-python = ">=3.11"
-dependencies = ["certifi>=2025.1.31", "websockets>=15.0.1"]
+dependencies = ["certifi>=2025.1.31", "httpx>=0.28.1", "websockets>=15.0.1"]
 authors = [{ name = "Martin Sandve Alnæs", email = "msa@databutton.io" }]
 maintainers = [{ name = "Martin Sandve Alnæs", email = "msa@databutton.io" }]
 

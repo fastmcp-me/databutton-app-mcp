@@ -1,4 +1,6 @@
 import argparse
+from typing import Any
+import httpx
 import asyncio
 import base64
 import json
@@ -44,17 +46,19 @@ async def run_ws_proxy(uri: str, bearer: str | None = None):
         loop.add_signal_handler(signal.SIGINT, loop.stop)
         loop.add_signal_handler(signal.SIGTERM, loop.stop)
 
+    subprotocols = [Subprotocol("mcp")]
+
     auth_headers: list[tuple[str, str]] = []
     if bearer:
         auth_headers.append(("Authorization", f"Bearer {bearer}"))
-
-    auth_subprotocols: list[Subprotocol] = []
-    # auth_subprotocols.append(Subprotocol(f"Authorization.Bearer.{bearer}"))
+        # This trick allows sending the Authorization header with the mcp subprotocol from a browser,
+        # but we don't need to do that here since we can set the header directly
+        # subprotocols.append(Subprotocol(f"Authorization.Bearer.{bearer}"))
 
     try:
         async with connect(
             uri,
-            subprotocols=[Subprotocol("mcp")] + auth_subprotocols,
+            subprotocols=subprotocols,
             additional_headers=auth_headers,
             open_timeout=60,
             ping_interval=10,
@@ -78,7 +82,18 @@ async def run_ws_proxy(uri: str, bearer: str | None = None):
         logger.error(f"Closing with error: {e}")
 
 
+def safe_base64url_decode(data: str) -> bytes:
+    data = data.strip()
+    padding = "=" * (-len(data) % 4)
+    return base64.urlsafe_b64decode(data + padding)
+
+
+def decode_base64_json(b: str) -> Any:
+    return json.loads(safe_base64url_decode(b))
+
+
 def parse_apikey(apikey: str) -> dict[str, str]:
+    """Legacy API key format from initial testing."""
     if not apikey:
         raise ValueError("API key must be provided")
 
@@ -102,6 +117,45 @@ def parse_apikey(apikey: str) -> dict[str, str]:
     raise ValueError("Invalid API key")
 
 
+def interpret_apikey(apikey: str) -> tuple[str, str | None]:
+    """Parse the Databutton app api key and return the wss uri and access token."""
+    prefix = "dbtk-v1-"
+    if apikey.startswith(prefix):
+        apikey_contents = decode_base64_json(apikey.replace(prefix, ""))
+        bearer = get_access_token(apikey_contents.get("tok"))
+        bearer_claims = decode_base64_json(bearer.split(".")[1])
+        dbtn_claims = bearer_claims.get("dbtn")
+        appId = dbtn_claims.get("appId")
+        env = dbtn_claims.get("env")
+        uri = f"wss://api.databutton.com/_projects/{appId}/dbtn/{env}/app/mcp/ws"
+        return uri, bearer
+    else:
+        # Legacy API key format from initial testing
+        dbtn_claims: dict[str, str] = {}
+        dbtn_claims = parse_apikey(apikey)
+        uri = dbtn_claims.get("uri")
+        if not uri:
+            raise ValueError("Missing URI in api key")
+        if not (
+            uri.startswith("ws://localhost")
+            or uri.startswith("ws://127.0.0.1:")
+            or uri.startswith("wss://")
+        ):
+            raise ValueError("URI must start with 'ws://' or 'wss://'")
+        return uri, dbtn_claims.get("authCode")
+
+
+def get_access_token(refresh_token: str) -> str:
+    """Get firebase access token from a refresh token."""
+    public_firebase_api_key = "AIzaSyAdgR9BGfQrV2fzndXZLZYgiRtpydlq8ug"
+    response = httpx.post(
+        f"https://securetoken.googleapis.com/v1/token?key={public_firebase_api_key}",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+    )
+    return response.json().get("id_token")
+
+
 DATABUTTON_API_KEY = "DATABUTTON_API_KEY"
 
 description = "Expose Databutton app endpoints as LLM tools with MCP over websocket"
@@ -113,34 +167,42 @@ Go to https://databutton.com to build apps and get your API key.
 """
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        prog="databutton-app-mcp",
+        usage="uvx databutton-app-mcp@latest [-h] [-k APIKEYFILE] [-v]",
+        description="Expose Databutton app endpoints as LLM tools with MCP over websocket",
+        epilog=epilog,
+    )
+    parser.add_argument(
+        "-k",
+        "--apikeyfile",
+        help="File containing the API key",
+        required=False,
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        help="Run in verbose mode with info logging",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        help="Run in very verbose mode with debug logging",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--show-uri",
+        help="Show uri it would connect to and exit",
+        action="store_true",
+    )
+    return parser.parse_args()
+
+
 def main():
     try:
-        parser = argparse.ArgumentParser(
-            prog="databutton-app-mcp",
-            usage="uvx databutton-app-mcp@latest [-h] [-k APIKEYFILE] [-v]",
-            description="Expose Databutton app endpoints as LLM tools with MCP over websocket",
-            epilog=epilog,
-        )
-        parser.add_argument(
-            "-k",
-            "--apikeyfile",
-            help="File containing the API key",
-            required=False,
-        )
-        parser.add_argument(
-            "-v",
-            "--verbose",
-            help="Run in verbose mode with info logging",
-            action="store_true",
-        )
-        parser.add_argument(
-            "-d",
-            "--debug",
-            help="Run in very verbose mode with debug logging",
-            action="store_true",
-        )
-        args = parser.parse_args()
-
+        args = parse_args()
         env_apikey = os.environ.get(DATABUTTON_API_KEY)
     except Exception as e:
         logger.error(f"Error while parsing input: {e}")
@@ -165,7 +227,7 @@ def main():
 
         if args.apikeyfile and pathlib.Path(args.apikeyfile).exists():
             logger.info(f"Using api key from file {args.apikeyfile}")
-            apikey = pathlib.Path(args.apikeyfile).read_text()
+            apikey = pathlib.Path(args.apikeyfile).read_text().strip()
         else:
             logger.info("Using api key from environment variable")
             apikey = env_apikey
@@ -177,41 +239,22 @@ def main():
         logger.error(f"Failed to get API key: {e}")
         sys.exit(1)
 
-    claims: dict[str, str] = {}
     try:
-        claims = parse_apikey(apikey)
-    except Exception as e:
-        logger.error(f"Failed to parse API key: {e}")
-        sys.exit(1)
-
-    try:
-        uri = claims.get("uri")
-        if not uri:
-            logger.error("URI must be provided")
-            sys.exit(1)
-
-        if not (
-            uri.startswith("ws://localhost")
-            or uri.startswith("ws://127.0.0.1:")
-            or uri.startswith("wss://")
-        ):
-            logger.error("URI must start with 'ws://' or 'wss://'")
-            sys.exit(1)
-
-        # TODO: Exchange refresh token for access token here
-        accessToken: str | None = claims.get("accessToken")
-        if claims.get("refreshToken"):
-            pass
-
+        uri, bearer = interpret_apikey(apikey)
     except Exception as e:
         logger.error(f"Failed to interpret API key: {e}")
         sys.exit(1)
+
+    if args.show_uri:
+        print("databutton-app-mcp would connect to:")
+        print(uri)
+        sys.exit(0)
 
     try:
         asyncio.run(
             run_ws_proxy(
                 uri=uri,
-                bearer=accessToken,
+                bearer=bearer,
             )
         )
     except KeyboardInterrupt:
