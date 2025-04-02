@@ -1,6 +1,6 @@
 [project]
 name = "databutton-app-mcp"
-version = "0.1.14"
+version = "0.1.15"
 description = "Call your Databutton app endpoints as LLM tools with MCP"
 readme = "README.md"
 license = "MIT"

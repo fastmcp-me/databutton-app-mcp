@@ -37,9 +37,12 @@ async def ws_to_stdout(websocket: ClientConnection):
 async def run_ws_proxy(uri: str, bearer: str | None = None):
     logger.info(f"Connecting to mcp server at {uri}")
 
-    # Set up signal handling for graceful exit
-    loop = asyncio.get_event_loop()
-    loop.add_signal_handler(signal.SIGINT, loop.stop)
+    # add_signal_handler doesn't support Windows
+    if sys.platform != "win32":
+        # Set up signal handling for graceful exit
+        loop = asyncio.get_event_loop()
+        loop.add_signal_handler(signal.SIGINT, loop.stop)
+        loop.add_signal_handler(signal.SIGTERM, loop.stop)
 
     auth_headers: list[tuple[str, str]] = []
     if bearer:
