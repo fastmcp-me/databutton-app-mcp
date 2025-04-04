@@ -14,6 +14,7 @@ import sys
 import certifi
 from websockets import Subprotocol, connect
 from websockets.asyncio.client import ClientConnection
+from websockets import exceptions
 
 logger = logging.getLogger("databutton-app-mcp")
 
@@ -83,8 +84,26 @@ async def run_ws_proxy(uri: str, bearer: str | None = None):
             finally:
                 stdin_task.cancel()
                 stdout_task.cancel()
+    except exceptions.ConnectionClosedOK:
+        logger.error("Connection closed cleanly")
+    except exceptions.ConnectionClosedError as e:
+        logger.error(f"Connection closed with error: {e}")
+    except exceptions.InvalidStatus as e:
+        if e.response.status_code == 502:
+            if "prodx" in uri:
+                logger.error(
+                    "Connection refused: has the Databutton app been deployed after enabling MCP?"
+                )
+            else:
+                logger.error(
+                    "Connection refused: has MCP been enabled in the Databutton app?"
+                )
+    except exceptions.InvalidHandshake as e:
+        logger.error(f"Connection handshake failed: {e}")
+    except exceptions.WebSocketException as e:
+        logger.error(f"Unhandled websocket error: {e}")
     except Exception as e:
-        logger.error(f"Closing with error: {e}")
+        logger.error(f"Unexpected error: {e}")
 
 
 def safe_base64url_decode(data: str) -> bytes:
